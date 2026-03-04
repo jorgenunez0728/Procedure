@@ -1,0 +1,32 @@
+{
+  "name": "kmx-procedure-creator",
+  "version": "1.0.0",
+  "description": "AI-powered procedure documentation tool for KMX Emissions Laboratory — KIA México",
+  "main": "generate_docx.js",
+  "scripts": {
+    "docx": "node generate_docx.js",
+    "help": "echo 'Usage: node generate_docx.js <input.json> <output.docx>'"
+  },
+  "keywords": [
+    "kmx",
+    "kia",
+    "emissions",
+    "laboratory",
+    "procedure",
+    "documentation",
+    "claude-api",
+    "offline-first"
+  ],
+  "author": "Jorge Martínez — KMX Emissions Lab",
+  "license": "MIT",
+  "dependencies": {
+    "docx": "^9.5.3"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TU_USUARIO/kmx-procedure-creator.git"
+  }
+}
