@@ -92,12 +92,31 @@ La estructura del procedimiento que debes capturar es:
 **Instrucciones de comportamiento:**
 - Sé conversacional, amigable, y habla en español
 - Haz máximo 2-3 preguntas a la vez, nunca abrumes con un cuestionario completo
-- Cuando el usuario adjunte una imagen, SIEMPRE pregunta explícitamente: "¿A qué paso pertenece esta imagen?" y espera la respuesta antes de continuar. Cuando el usuario responda con el número de paso, usa ese número en el campo imageId del paso correspondiente en el JSON final (ej. "imageId": 2)
-- Si el usuario sube varias imágenes en un solo mensaje, pregunta de qué paso es cada una por separado
 - Al completar una sección, haz un breve resumen de lo capturado y pregunta si está correcto
 - Detecta si el procedimiento que se está describiendo es similar a alguno en la biblioteca (te pasaré la lista de procedimientos existentes)
 - Si detectas similitud, menciona cuál es el procedimiento similar y pregunta en qué difiere este nuevo, para no repetir preguntas innecesarias
 - Cuando ya tengas suficiente información para generar el documento, indica que estás listo para exportar y genera un resumen completo en formato JSON estructurado
+
+**Detección automática de imágenes en pasos:**
+Mientras el usuario describe cada paso, analiza si ese paso involucra:
+- Una acción en pantalla o interfaz (hacer clic en un botón/icono/menú, seleccionar una opción, leer un valor en pantalla)
+- Una manipulación física de equipo donde la posición o el resultado es importante ver
+- Un estado visible que debe verificarse visualmente
+
+Si detectas alguno de estos casos, al terminar de registrar ese paso, pregunta de forma natural:
+"He notado que el paso [número] involucra [acción]. ¿Tienes una captura o foto que muestre esto, o prefieres agregarla después?"
+- Si responde que la adjuntará después: marca el paso con `"hasImage": true, "imageId": null` y en `"imageContext"` escribe una descripción breve de qué debería mostrar la imagen (ej. "Captura de la pantalla con el icono Quality Check resaltado")
+- Si adjunta la imagen en ese momento: pregunta "¿Confirmas que esta imagen es para el paso [número]?" y si confirma, usa ese número en `"imageId"`
+
+**Si el usuario adjunta imágenes:**
+- SIEMPRE pregunta explícitamente: "¿A qué paso pertenece esta imagen?" y espera la respuesta
+- Cuando el usuario responda con el número, usa ese número en `"imageId"` del paso correspondiente
+- Si sube varias imágenes a la vez, pregunta de qué paso es cada una por separado
+
+**Cuando el usuario pregunte qué falta** (ej. "¿qué falta?", "muéstrame el esquema", "¿qué imágenes faltan?", "¿qué hay pendiente?"):
+Responde con una lista clara y ordenada:
+1. Pasos marcados como pendientes de imagen (número, título, qué debería mostrar la foto)
+2. Secciones del procedimiento que aún no se han capturado
 
 **Al final, cuando tengas toda la información, responde con un bloque especial:**
 <PROCEDURE_DATA>
@@ -115,7 +134,7 @@ El JSON debe tener esta estructura exacta:
   "scope": "texto",
   "definitions": [{"term": "", "definition": ""}],
   "responsibilities": [{"role": "", "responsibility": "", "authority": ""}],
-  "steps": [{"number": 1, "title": "", "description": "", "notes": "", "hasImage": false, "imageId": null}],
+  "steps": [{"number": 1, "title": "", "description": "", "notes": "", "hasImage": false, "imageId": null, "imageContext": ""}],
   "acceptance_criteria": "texto",
   "records": "texto",
   "related_procedures": []
@@ -613,6 +632,8 @@ function renderPreview(proc) {
       <div class="preview-value">${d.acceptance_criteria}</div>
     </div>` : ''}
   `;
+
+  renderPendingPanel(proc);
 }
 
 // ══════════════════════════════════════════════
@@ -771,7 +792,12 @@ ${d.related_procedures.map(r => `<p>• ${r}</p>`).join('')}` : ''}
       if (step?._imgDataUrl) {
         return `${prefix} src="${step._imgDataUrl}"${suffix}`;
       }
-      return `<div style="border:1px dashed #bbb;background:#fafaf8;padding:16px;text-align:center;color:#999;font-size:9pt;margin:8px 0">[Foto del paso ${stepNum} — imagen no encontrada]</div>`;
+      const context = step?.imageContext || `Foto del paso ${stepNum}`;
+      return `<div style="border:2px dashed #C8380A;background:#fff8e6;padding:20px;text-align:center;border-radius:6px;margin:10px 0;page-break-inside:avoid;">
+  <div style="font-size:26px;margin-bottom:6px;">📷</div>
+  <div style="font-weight:700;color:#C8380A;font-size:10pt;margin-bottom:6px;">IMAGEN PENDIENTE — Paso ${stepNum}</div>
+  <div style="font-size:9pt;color:#7a5c00;font-style:italic;">${context}</div>
+</div>`;
     }
   );
 
@@ -829,6 +855,66 @@ function showNotif(msg) {
 }
 
 // ══════════════════════════════════════════════
+// PENDING PANEL
+// ══════════════════════════════════════════════
+function switchPreviewTab(tab) {
+  const isPreview = tab === 'preview';
+  document.getElementById('tab-preview').classList.toggle('active', isPreview);
+  document.getElementById('tab-pending').classList.toggle('active', !isPreview);
+  document.getElementById('preview-body').style.display = isPreview ? 'block' : 'none';
+  document.getElementById('pending-body').style.display = isPreview ? 'none' : 'block';
+}
+
+function renderPendingPanel(proc) {
+  const d = proc?.data || {};
+  const pendingImgs = (d.steps || []).filter(s => s.hasImage && !s.imageSaved);
+
+  const badge = document.getElementById('pending-badge');
+  if (badge) {
+    badge.textContent = pendingImgs.length;
+    badge.style.display = pendingImgs.length > 0 ? 'inline-flex' : 'none';
+  }
+
+  const body = document.getElementById('pending-body');
+  if (!body) return;
+
+  const missingSections = [];
+  if (!d.purpose) missingSections.push('Propósito');
+  if (!d.scope) missingSections.push('Alcance');
+  if (!d.definitions?.length) missingSections.push('Definiciones');
+  if (!d.responsibilities?.length) missingSections.push('Responsabilidades');
+  if (!d.steps?.length) missingSections.push('Pasos del procedimiento');
+  if (!d.acceptance_criteria) missingSections.push('Criterios de aceptación');
+  if (!d.records) missingSections.push('Registros');
+
+  if (!pendingImgs.length && !missingSections.length) {
+    body.innerHTML = `<div style="color:var(--muted);text-align:center;padding:32px 16px;font-size:13px;line-height:1.6;">✓ Sin pendientes<br><span style="font-size:11px;">El procedimiento está completo.</span></div>`;
+    return;
+  }
+
+  let html = '';
+
+  if (pendingImgs.length) {
+    html += `<div class="pending-section-title">📷 Fotos pendientes (${pendingImgs.length})</div>`;
+    html += pendingImgs.map(s => `
+      <div class="pending-img-card">
+        <div class="pending-step-num">Paso ${s.number}</div>
+        <div class="pending-step-title">${s.title || '(sin título)'}</div>
+        ${s.imageContext ? `<div class="pending-img-context">"${s.imageContext}"</div>` : ''}
+        <button class="pending-assign-btn" onclick="openAssignImageModalForStep(${s.number})">+ Asignar foto</button>
+      </div>
+    `).join('');
+  }
+
+  if (missingSections.length) {
+    html += `<div class="pending-section-title" style="margin-top:${pendingImgs.length ? 16 : 0}px;">📋 Secciones incompletas</div>`;
+    html += missingSections.map(s => `<div class="pending-missing-section">• ${s}</div>`).join('');
+  }
+
+  body.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════
 // ASSIGN IMAGE TO STEP
 // ══════════════════════════════════════════════
 let assignPendingImg = null;
@@ -840,6 +926,13 @@ function openAssignImageModal() {
   document.getElementById('assign-step-num').value = '';
   document.getElementById('assign-step-preview').textContent = '';
   document.getElementById('assign-img-modal').classList.add('open');
+}
+
+function openAssignImageModalForStep(stepNum) {
+  openAssignImageModal();
+  const input = document.getElementById('assign-step-num');
+  input.value = stepNum;
+  input.dispatchEvent(new Event('input'));
 }
 
 function closeAssignModal() {

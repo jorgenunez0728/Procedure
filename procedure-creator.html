@@ -131,13 +131,21 @@
   <!-- PREVIEW PANEL -->
   <div class="preview-panel">
     <div class="preview-header">
-      <h3>Vista Previa</h3>
+      <h3>Documento</h3>
       <div style="font-family:var(--mono);font-size:10px;color:var(--muted)" id="preview-completeness">0%</div>
+    </div>
+    <div class="preview-tabs">
+      <button class="preview-tab active" id="tab-preview" onclick="switchPreviewTab('preview')">Vista Previa</button>
+      <button class="preview-tab" id="tab-pending" onclick="switchPreviewTab('pending')">
+        Pendientes <span class="pending-badge" id="pending-badge" style="display:none">0</span>
+      </button>
     </div>
     <div class="preview-body" id="preview-body">
       <div style="color:var(--muted); font-size:13px; text-align:center; padding:32px 0;">
         La información capturada aparecerá aquí en tiempo real.
       </div>
+    </div>
+    <div class="pending-body" id="pending-body" style="display:none; flex:1; overflow-y:auto; padding:16px;">
     </div>
   </div>
 
